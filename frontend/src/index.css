@@ -1,0 +1,95 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * { box-sizing: border-box; }
+  
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: #0a0a0f;
+    color: #f8f8ff;
+    overflow-x: hidden;
+  }
+
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: rgba(255,255,255,0.03); }
+  ::-webkit-scrollbar-thumb { background: rgba(99,102,241,0.4); border-radius: 3px; }
+}
+
+@layer components {
+  .glass {
+    background: rgba(255, 255, 255, 0.04);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .glass-light {
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+  }
+
+  .glow-iris {
+    box-shadow: 0 0 30px rgba(99, 102, 241, 0.3), 0 0 60px rgba(99, 102, 241, 0.1);
+  }
+
+  .text-gradient {
+    background: linear-gradient(135deg, #818cf8 0%, #c084fc 50%, #38bdf8 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .key-gaze-active {
+    background: linear-gradient(135deg, #ffd700, #ffb300) !important;
+    border-color: #ff9900 !important;
+    transform: scale(1.08) !important;
+    box-shadow: 0 0 20px rgba(255, 215, 0, 0.6), 0 0 40px rgba(255, 180, 0, 0.3) !important;
+  }
+
+  .mesh-bg {
+    background: 
+      radial-gradient(ellipse at 20% 50%, rgba(99, 102, 241, 0.15) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 20%, rgba(192, 132, 252, 0.1) 0%, transparent 50%),
+      radial-gradient(ellipse at 60% 80%, rgba(56, 189, 248, 0.08) 0%, transparent 50%),
+      #0a0a0f;
+  }
+
+  .status-dot-active { background: #22c55e; box-shadow: 0 0 6px #22c55e; }
+  .status-dot-idle { background: #f59e0b; box-shadow: 0 0 6px #f59e0b; }
+  .status-dot-offline { background: #ef4444; box-shadow: 0 0 6px #ef4444; }
+}
+
+/* WebGazer overrides */
+#webgazerVideoContainer {
+  position: fixed !important;
+  bottom: 20px !important;
+  right: 20px !important;
+  top: auto !important;
+  left: auto !important;
+  width: 200px !important;
+  height: 150px !important;
+  z-index: 9999 !important;
+  overflow: hidden !important;
+  border: 2px solid rgba(99, 102, 241, 0.5) !important;
+  border-radius: 12px !important;
+  background-color: #000 !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.5), 0 0 20px rgba(99,102,241,0.2) !important;
+}
+
+#webgazerVideoContainer video,
+#webgazerVideoContainer canvas {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  position: absolute !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  pointer-events: none !important;
+}
+
+#webgazerGazeDot {
+  display: none !important;
+}
