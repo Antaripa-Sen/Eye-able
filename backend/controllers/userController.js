@@ -1,6 +1,5 @@
 const pool = require('../config/db');
 
-// GET /api/users/students - teacher gets all students
 const getStudents = async (req, res) => {
   try {
     const result = await pool.query(
@@ -17,7 +16,6 @@ const getStudents = async (req, res) => {
   }
 };
 
-// GET /api/users/me/profile
 const getProfile = async (req, res) => {
   try {
     const user = await pool.query(
@@ -28,7 +26,6 @@ const getProfile = async (req, res) => {
       [req.user.id]
     );
     if (!user.rows.length) return res.status(404).json({ error: 'User not found' });
-
     const { password_hash, ...profile } = user.rows[0];
     res.json(profile);
   } catch (err) {
@@ -36,11 +33,13 @@ const getProfile = async (req, res) => {
   }
 };
 
-// GET /api/users/notifications
+// GET /api/users/notifications — only return UNREAD notifications
 const getNotifications = async (req, res) => {
   try {
     const result = await pool.query(
-      'SELECT * FROM notifications WHERE recipient_id = $1 ORDER BY created_at DESC LIMIT 50',
+      `SELECT * FROM notifications
+       WHERE recipient_id = $1 AND is_read = false
+       ORDER BY created_at DESC LIMIT 50`,
       [req.user.id]
     );
     res.json(result.rows);
@@ -49,17 +48,32 @@ const getNotifications = async (req, res) => {
   }
 };
 
-// PATCH /api/users/notifications/:id/read
+// PATCH /api/users/notifications/:id/read — mark read (disappears from list since we only fetch unread)
 const markNotificationRead = async (req, res) => {
   try {
-    await pool.query('UPDATE notifications SET is_read = true WHERE id = $1 AND recipient_id = $2', [req.params.id, req.user.id]);
+    await pool.query(
+      'UPDATE notifications SET is_read = true WHERE id = $1 AND recipient_id = $2',
+      [req.params.id, req.user.id]
+    );
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 };
 
-// POST /api/users/sessions/start
+// PATCH /api/users/notifications/read-all — mark all read at once
+const markAllNotificationsRead = async (req, res) => {
+  try {
+    await pool.query(
+      'UPDATE notifications SET is_read = true WHERE recipient_id = $1 AND is_read = false',
+      [req.user.id]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
 const startSession = async (req, res) => {
   try {
     const result = await pool.query(
@@ -72,7 +86,6 @@ const startSession = async (req, res) => {
   }
 };
 
-// PATCH /api/users/sessions/:id/end
 const endSession = async (req, res) => {
   try {
     await pool.query(
@@ -87,4 +100,8 @@ const endSession = async (req, res) => {
   }
 };
 
-module.exports = { getStudents, getProfile, getNotifications, markNotificationRead, startSession, endSession };
+module.exports = {
+  getStudents, getProfile, getNotifications,
+  markNotificationRead, markAllNotificationsRead,
+  startSession, endSession
+};

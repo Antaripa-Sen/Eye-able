@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS assignments (
   type VARCHAR(50) DEFAULT 'sentence_typing' CHECK (type IN ('sentence_typing', 'paragraph_typing', 'communication', 'vocabulary', 'exam')),
   difficulty VARCHAR(20) DEFAULT 'medium' CHECK (difficulty IN ('easy', 'medium', 'hard')),
   is_published BOOLEAN DEFAULT false,
+  total_marks INTEGER DEFAULT 10,
   due_date TIMESTAMPTZ,
   time_limit_minutes INTEGER,
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -52,7 +53,7 @@ CREATE TABLE IF NOT EXISTS assignment_students (
   PRIMARY KEY (assignment_id, student_id)
 );
 
--- Submissions table
+-- Submissions table (with marks, feedback, correction)
 CREATE TABLE IF NOT EXISTS submissions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   assignment_id UUID REFERENCES assignments(id) ON DELETE SET NULL,
@@ -62,6 +63,12 @@ CREATE TABLE IF NOT EXISTS submissions (
   submitted_at TIMESTAMPTZ,
   wpm NUMERIC(6,2) DEFAULT 0,
   accuracy NUMERIC(5,2) DEFAULT 0,
+  marks NUMERIC(6,2) DEFAULT NULL,
+  total_marks INTEGER DEFAULT NULL,
+  feedback TEXT DEFAULT NULL,
+  correction TEXT DEFAULT NULL,
+  graded_by UUID REFERENCES users(id),
+  graded_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -160,6 +167,12 @@ BEGIN
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+
+-- Drop triggers if exist then recreate
+DROP TRIGGER IF EXISTS users_updated_at ON users;
+DROP TRIGGER IF EXISTS assignments_updated_at ON assignments;
+DROP TRIGGER IF EXISTS submissions_updated_at ON submissions;
+DROP TRIGGER IF EXISTS accessibility_settings_updated_at ON accessibility_settings;
 
 CREATE TRIGGER users_updated_at BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER assignments_updated_at BEFORE UPDATE ON assignments FOR EACH ROW EXECUTE FUNCTION update_updated_at();
