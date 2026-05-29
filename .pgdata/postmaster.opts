@@ -1,0 +1,1 @@
+/usr/lib/postgresql/16/bin/postgres "-D" ".pgdata" "-p" "5433" "-h" "127.0.0.1" "-k" "/workspaces/Eye-able/.pgdata/socket"
