@@ -96,8 +96,9 @@ export default function AuthPage() {
             <path d="M 0 30 Q 50 0 100 30 Q 50 60 0 30" fill="white" />
             <circle cx="50" cy="30" r="16" fill="#38bdf8" />
             <circle cx="50" cy="30" r="10" fill="#1e3a8a" />
-            <motion.circle 
-              cx="50" cy="30" r="6" fill="#1a1040" 
+            <motion.circle
+              cx={50} cy={30} r={6} fill="#1a1040"
+              initial={{ cx: 50, cy: 30 }}
               animate={{ cx: [50, 53, 47, 50], cy: [30, 28, 32, 30] }}
               transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
             />

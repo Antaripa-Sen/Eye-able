@@ -74,6 +74,31 @@ const markAllNotificationsRead = async (req, res) => {
   }
 };
 
+const removeStudent = async (req, res) => {
+  const studentId = req.params.id;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const studentRes = await client.query(
+      "SELECT id FROM users WHERE id = $1 AND role = 'student' AND is_active = true",
+      [studentId]
+    );
+    if (!studentRes.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Student not found' });
+    }
+    await client.query('DELETE FROM assignment_students WHERE student_id = $1', [studentId]);
+    await client.query('UPDATE users SET is_active = false WHERE id = $1', [studentId]);
+    await client.query('COMMIT');
+    res.json({ success: true });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+};
+
 const startSession = async (req, res) => {
   try {
     const result = await pool.query(

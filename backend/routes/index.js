@@ -46,6 +46,7 @@ router.get('/users/me/profile',                  authenticate, users.getProfile)
 router.get('/users/notifications',               authenticate, users.getNotifications);
 router.patch('/users/notifications/read-all',    authenticate, users.markAllNotificationsRead);
 router.patch('/users/notifications/:id/read',    authenticate, users.markNotificationRead);
+router.delete('/users/students/:id',             authenticate, requireRole('teacher'), users.removeStudent);
 router.post('/users/sessions/start',             authenticate, users.startSession);
 router.patch('/users/sessions/:id/end',          authenticate, users.endSession);
 

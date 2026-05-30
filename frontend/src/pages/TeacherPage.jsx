@@ -130,19 +130,25 @@ export default function TeacherPage() {
   };
 
   const submitGrade = async () => {
+    if (!selectedSubmission) return toast.error('No submission selected');
     if (gradeForm.marks === '') return toast.error('Enter marks');
     const marks = Number(gradeForm.marks);
     if (isNaN(marks) || marks < 0) return toast.error('Invalid marks');
     if (marks > gradeForm.totalMarks) return toast.error(`Cannot exceed ${gradeForm.totalMarks}`);
+    const submissionId = selectedSubmission.id || selectedSubmission.submission_id;
+    if (!submissionId) return toast.error('Submission ID missing');
     try {
-      const res = await authFetch(`/submissions/${selectedSubmission.id}/grade`, {
+      const res = await authFetch(`/submissions/${submissionId}/grade`, {
         method: 'PATCH',
         body: JSON.stringify({ marks, totalMarks: gradeForm.totalMarks, feedback: gradeForm.feedback || null, correction: gradeForm.correction || null }),
       });
-      if (!res.ok) return toast.error('Failed');
-      toast.success(`✅ Marks sent to ${selectedSubmission.full_name}`);
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => null);
+        return toast.error(errBody?.error || 'Failed to grade submission');
+      }
+      toast.success(`✅ Marks sent to ${selectedSubmission.full_name || selectedSubmission.name || 'student'}`);
       setShowGradeModal(false);
-      setSubmissions(prev => prev.map(s => s.id === selectedSubmission.id
+      setSubmissions(prev => prev.map(s => s.id === submissionId
         ? { ...s, marks, total_marks: gradeForm.totalMarks, feedback: gradeForm.feedback, correction: gradeForm.correction, graded_at: new Date().toISOString(), status: 'reviewed' }
         : s
       ));
@@ -160,6 +166,24 @@ export default function TeacherPage() {
   };
 
   const recalibrate = (studentId) => { getSocket()?.emit('teacher:recalibrate', { studentId }); toast.info('Recalibration request sent'); };
+
+  const removeStudent = async (studentId) => {
+    if (!studentId) return toast.error('Student id missing');
+    if (!confirm('Remove this student from the class?')) return;
+    try {
+      const res = await authFetch(`/users/students/${studentId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => null);
+        return toast.error(errBody?.error || 'Unable to remove student');
+      }
+      setOnlineStudents(prev => prev.filter(s => (s.userId || s.id) !== studentId));
+      setAllStudents(prev => prev.filter(s => s.id !== studentId));
+      toast.success('Student removed from class');
+      setShowSettings(false);
+    } catch {
+      toast.error('Remove failed');
+    }
+  };
 
   const markRead = async (id) => {
     setNotifications(prev => prev.filter(n => n.id !== id)); 
@@ -197,7 +221,7 @@ export default function TeacherPage() {
             </svg>
             <div>
               <div className="font-black text-2xl tracking-wide">Able</div>
-              <div className="text-[#f5c842] font-bold text-sm">Guide Portal</div>
+              <div className="text-[#f5c842] font-bold text-sm">Teacher Portal</div>
             </div>
           </div>
         </div>
@@ -248,12 +272,15 @@ export default function TeacherPage() {
               </div>
               
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 mb-8">
-                {[
-                  { label: 'Online Now',      value: onlineStudents.length,          color: 'text-[#00FF00]' },
-                  { label: 'Total Students',  value: allStudents.length,             color: 'text-[#38bdf8]' },
-                  { label: 'Submissions',     value: subCounts.total_submissions,    color: 'text-[#f5c842]' },
-                  { label: 'To Review',       value: subCounts.pending_review_count, color: 'text-[#f28c6e]' },
-                ].map(({ label, value, color }) => (
+                {(() => {
+                  const totalStudentsCount = Math.max(allStudents.length, onlineStudents.length);
+                  return [
+                    { label: 'Online Now',      value: onlineStudents.length,          color: 'text-[#00FF00]' },
+                    { label: 'Total Students',  value: totalStudentsCount,             color: 'text-[#38bdf8]' },
+                    { label: 'Submissions',     value: subCounts.total_submissions,    color: 'text-[#f5c842]' },
+                    { label: 'To Review',       value: subCounts.pending_review_count, color: 'text-[#f28c6e]' },
+                  ];
+                })().map(({ label, value, color }) => (
                   <div key={label} className="bg-[#2a1f5c] rounded-[2rem] p-6 border-4 border-[#1a1040]">
                     <div className={`text-5xl font-black ${color}`}>{value}</div>
                     <div className="text-white/60 font-bold mt-2 uppercase tracking-wider text-sm">{label}</div>
@@ -271,7 +298,8 @@ export default function TeacherPage() {
                   {onlineStudents.map(s => (
                     <StudentCard key={s.socketId || s.userId} student={s}
                       onSettings={() => { setSelectedStudent(s); setShowSettings(true); }}
-                      onRecalibrate={() => recalibrate(s.userId)} />
+                      onRecalibrate={() => recalibrate(s.userId)}
+                      onRemove={() => removeStudent(s.userId || s.id)} />
                   ))}
                 </div>
               )}
@@ -540,18 +568,25 @@ export default function TeacherPage() {
 }
 
 // Sub-components mapped to new styling
-function StudentCard({ student, onSettings, onRecalibrate }) {
+function StudentCard({ student, onSettings, onRecalibrate, onRemove }) {
   const dotColor = student.status === 'active' ? '#00FF00' : student.status === 'idle' ? '#f5c842' : '#f28c6e';
   return (
     <div className="bg-[#2a1f5c] rounded-[2rem] p-6 border-4 border-[#1a1040]">
       <div className="flex justify-between items-start mb-6">
         <div className="flex items-center gap-3">
           <div className="w-4 h-4 rounded-full" style={{ backgroundColor: dotColor, boxShadow: `0 0 10px ${dotColor}` }} />
-          <h3 className="font-black text-2xl text-white">{student.name}</h3>
+          <h3 className="font-black text-2xl text-white">{student.name || student.full_name}</h3>
         </div>
-        <button onClick={onSettings} className="bg-[#1a1040] p-3 rounded-full text-white/50 hover:text-[#f5c842] transition-colors">
-          <Sliders size={20} />
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={onSettings} className="bg-[#1a1040] p-3 rounded-full text-white/50 hover:text-[#f5c842] transition-colors">
+            <Sliders size={20} />
+          </button>
+          {onRemove && (
+            <button onClick={onRemove} className="bg-[#1a1040] p-3 rounded-full text-white/50 hover:text-rose-400 transition-colors">
+              <Trash2 size={20} />
+            </button>
+          )}
+        </div>
       </div>
       <div className="bg-[#1a1040] rounded-[1.5rem] p-4 font-mono text-lg text-white/80 h-20 overflow-hidden mb-6">
         {student.typingProgress || <span className="text-white/20 italic">Awaiting text...</span>}

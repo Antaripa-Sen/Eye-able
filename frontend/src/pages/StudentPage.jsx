@@ -23,6 +23,11 @@ export default function StudentPage() {
   const [text, setText] = useState('');
   const [gazeOn, setGazeOn] = useState(false);
   const [gazeConfidence, setGazeConfidence] = useState(0);
+  const [gazeError, setGazeError] = useState('');
+  const [gazeInitAttempted, setGazeInitAttempted] = useState(false);
+  const [webgazerScriptLoaded, setWebgazerScriptLoaded] = useState(false);
+  const [cameraPermissionState, setCameraPermissionState] = useState('unknown');
+  const [cameraDevices, setCameraDevices] = useState([]);
   const [activeKey, setActiveKey] = useState(null);
   const [dwellTime, setDwellTime] = useState(DWELL_DEFAULT);
   const [settings, setSettings] = useState(null);
@@ -42,6 +47,90 @@ export default function StudentPage() {
   const socketRef = useRef(null);
 
   textRef.current = text;
+
+  const requestCameraPermission = async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error('This browser does not support webcam access');
+    }
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    stream.getTracks().forEach((track) => track.stop());
+    return true;
+  };
+
+  const updateCameraStatus = async () => {
+    if (!navigator.mediaDevices) {
+      setCameraPermissionState('unsupported');
+      setCameraDevices([]);
+      return;
+    }
+
+    try {
+      if (navigator.permissions?.query) {
+        const status = await navigator.permissions.query({ name: 'camera' });
+        setCameraPermissionState(status.state);
+      }
+    } catch {
+      setCameraPermissionState('unknown');
+    }
+
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      setCameraDevices(devices.filter((device) => device.kind === 'videoinput'));
+    } catch {
+      setCameraDevices([]);
+    }
+  };
+
+  const ensureWebGazerLoaded = async () => {
+    if (typeof window.webgazer !== 'undefined') return;
+    const loadScript = (src) => new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = src;
+      s.crossOrigin = 'anonymous';
+      s.referrerPolicy = 'no-referrer';
+      s.onload = () => resolve();
+      s.onerror = (e) => reject(e);
+      document.head.appendChild(s);
+    });
+
+    try {
+      await loadScript('/webgazer.min.js');
+      setWebgazerScriptLoaded(true);
+    } catch (localErr) {
+      console.warn('Local WebGazer load failed, falling back to CDN', localErr);
+      try {
+        await loadScript('https://cdn.jsdelivr.net/npm/webgazer@2.1.0/dist/webgazer.min.js');
+        setWebgazerScriptLoaded(true);
+      } catch (cdnErr) {
+        console.error('Failed to load WebGazer from both local and CDN', cdnErr);
+        setGazeOn(false);
+        const localMessage = 'Eye tracking blocked by browser tracking prevention. Host webgazer locally at /webgazer.min.js and retry.';
+        setGazeError(localMessage);
+        toast.error('Eye tracking blocked by browser. Host webgazer locally and retry.');
+        throw cdnErr;
+      }
+    }
+  };
+
+  const startEyeTracking = async () => {
+    setGazeError('');
+    await updateCameraStatus();
+    try {
+      await requestCameraPermission();
+      await ensureWebGazerLoaded();
+      await initGaze();
+    } catch (err) {
+      console.error('Eye tracking start failed', err);
+      if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError') {
+        setGazeError('Camera access was denied. Please allow camera access in your browser site settings for localhost:5173 or this app domain, then retry.');
+      } else if (err?.name === 'NotFoundError' || err?.name === 'DevicesNotFoundError') {
+        setGazeError('No webcam found. Connect a camera and try again.');
+      } else {
+        setGazeError(err?.message || 'Unable to start eye tracking.');
+      }
+      await updateCameraStatus();
+    }
+  };
 
   // Load assignment and settings
   useEffect(() => {
@@ -111,18 +200,42 @@ export default function StudentPage() {
 
   // WebGazer initialization
   useEffect(() => {
+    const loadScript = (src) => new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = src;
+      s.crossOrigin = 'anonymous';
+      s.referrerPolicy = 'no-referrer';
+      s.onload = () => resolve();
+      s.onerror = (e) => reject(e);
+      document.head.appendChild(s);
+    });
+
     const timer = setTimeout(async () => {
-      if (typeof window.webgazer === 'undefined') {
-        const script = document.createElement('script');
-        script.src = 'https://cdn.jsdelivr.net/npm/webgazer@2.1.0/dist/webgazer.min.js';
-        script.onload = initGaze;
-        document.head.appendChild(script);
-      } else { initGaze(); }
+      if (!webgazerScriptLoaded) {
+        try {
+          await loadScript('https://cdn.jsdelivr.net/npm/webgazer@2.1.0/dist/webgazer.min.js');
+          setWebgazerScriptLoaded(true);
+        } catch (cdnErr) {
+          console.warn('Failed to load WebGazer from CDN, attempting local fallback', cdnErr);
+          try {
+            await loadScript('/webgazer.min.js');
+            setWebgazerScriptLoaded(true);
+          } catch (localErr) {
+            console.error('Local WebGazer fallback failed', localErr);
+            setGazeOn(false);
+            setGazeError('Eye tracking blocked by browser tracking prevention. Allow storage for the CDN or host webgazer locally at /webgazer.min.js and retry.');
+            toast.error('Eye tracking blocked by browser. Click retry or host webgazer locally.');
+          }
+        }
+      }
     }, 1000);
+
     return () => clearTimeout(timer);
-  }, [dwellTime]);
+  }, [webgazerScriptLoaded]);
 
   const initGaze = async () => {
+    setGazeInitAttempted(true);
+    setGazeError('');
     try {
       await window.webgazer
         .setRegression('ridge')
@@ -182,9 +295,13 @@ export default function StudentPage() {
       window.webgazer.showFaceFeedbackBox(true);
       window.webgazer.showPredictionPoints(false);
       setGazeOn(true);
+      setGazeError('');
     } catch (err) {
       console.error('WebGazer error:', err);
-      toast.error('Eye tracking unavailable. Use manual clicks.');
+      setGazeOn(false);
+      const message = err?.message || 'Eye tracking unavailable. Use manual clicks.';
+      setGazeError(message);
+      toast.error(message);
     }
   };
 
@@ -237,8 +354,10 @@ export default function StudentPage() {
       <header className="glass border-b border-white/5 px-6 py-3 flex items-center justify-between sticky top-0 z-40">
         <div className="flex items-center gap-3">
           <Eye className="text-iris-400" size={24} />
-          <span className="font-display font-bold text-white">EyeAble</span>
-          <span className="glass px-2 py-0.5 rounded-full text-xs text-iris-300 border border-iris-500/20">Student</span>
+          <div>
+            <div className="font-display font-bold text-white">EyeAble</div>
+            <div className="text-white/50 text-xs">Student Dashboard</div>
+          </div>
         </div>
 
         <div className="flex items-center gap-4">
@@ -264,6 +383,26 @@ export default function StudentPage() {
       </header>
 
       <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
+        {(!gazeOn && (!gazeInitAttempted || gazeError)) && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="glass rounded-2xl p-5 border border-sky-400/20 bg-sky-500/10">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-sky-100 font-semibold">Allow camera access to enable eye tracking</p>
+                <p className="text-white/70 text-sm mt-1">
+                  Click the button below and allow webcam access when your browser prompt appears. If you already allowed it, please verify your browser site settings for localhost:5173 or this app domain.
+                </p>
+                <div className="mt-3 text-sm text-white/70 space-y-1">
+                  <p>Camera permission: <span className="font-semibold text-white">{cameraPermissionState}</span></p>
+                  <p>Connected cameras: <span className="font-semibold text-white">{cameraDevices.length}</span></p>
+                </div>
+                {gazeError && <p className="text-yellow-200 text-sm mt-2">{gazeError}</p>}
+              </div>
+              <button onClick={startEyeTracking} className="px-4 py-2 rounded-xl bg-sky-400/10 border border-sky-400 text-sky-100 hover:bg-sky-400/20 transition">
+                Allow Camera Access
+              </button>
+            </div>
+          </motion.div>
+        )}
         {/* Question */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="glass rounded-2xl p-6">
           <p className="text-white/40 text-xs font-medium uppercase tracking-widest mb-2">Current Assignment</p>

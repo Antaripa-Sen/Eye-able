@@ -178,3 +178,15 @@ CREATE TRIGGER users_updated_at BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNC
 CREATE TRIGGER assignments_updated_at BEFORE UPDATE ON assignments FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER submissions_updated_at BEFORE UPDATE ON submissions FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER accessibility_settings_updated_at BEFORE UPDATE ON accessibility_settings FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- Backfill grading-related columns for existing deployments
+ALTER TABLE IF EXISTS assignments ADD COLUMN IF NOT EXISTS total_marks INTEGER DEFAULT 10;
+ALTER TABLE IF EXISTS submissions ADD COLUMN IF NOT EXISTS marks NUMERIC(6,2) DEFAULT NULL;
+ALTER TABLE IF EXISTS submissions ADD COLUMN IF NOT EXISTS total_marks INTEGER DEFAULT NULL;
+ALTER TABLE IF EXISTS submissions ADD COLUMN IF NOT EXISTS feedback TEXT DEFAULT NULL;
+ALTER TABLE IF EXISTS submissions ADD COLUMN IF NOT EXISTS correction TEXT DEFAULT NULL;
+ALTER TABLE IF EXISTS submissions ADD COLUMN IF NOT EXISTS graded_by UUID REFERENCES users(id);
+ALTER TABLE IF EXISTS submissions ADD COLUMN IF NOT EXISTS graded_at TIMESTAMP WITH TIME ZONE;
+
+UPDATE assignments SET total_marks = 10 WHERE total_marks IS NULL;
+UPDATE submissions SET total_marks = 10 WHERE total_marks IS NULL;

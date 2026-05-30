@@ -67,8 +67,18 @@ const createAssignment = async (req, res) => {
   try {
     await client.query('BEGIN');
     const result = await client.query(
-      `INSERT INTO assignments (teacher_id, title, content, type, difficulty, due_date, time_limit_minutes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      `INSERT INTO assignments (
+  teacher_id,
+  title,
+  content,
+  type,
+  difficulty,
+  due_date,
+  time_limit_minutes,
+  is_published
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, true)
+RETURNING *) RETURNING *`,
       [req.user.id, title, content, type || 'sentence_typing', difficulty || 'medium', dueDate || null, timeLimitMinutes || null]
     );
     const assignment = result.rows[0];
