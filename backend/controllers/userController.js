@@ -126,7 +126,12 @@ const endSession = async (req, res) => {
 };
 
 module.exports = {
-  getStudents, getProfile, getNotifications,
-  markNotificationRead, markAllNotificationsRead,
-  startSession, endSession
+  getStudents,
+  getProfile,
+  getNotifications,
+  markNotificationRead,
+  markAllNotificationsRead,
+  startSession,
+  endSession,
+  removeStudent
 };
